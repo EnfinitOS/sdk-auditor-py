@@ -17,12 +17,14 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Security :: Cryptography",
     "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
 ]
 dependencies = [
-    "cryptography>=42",
-    "httpx>=0.27",
+    "cryptography>=44",
+    "httpx>=0.28",
 ]
 
 [project.urls]
@@ -40,6 +42,11 @@ package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# Ship the py.typed marker so downstream type-checkers (mypy / pyright)
+# treat the package as typed per PEP 561.
+[tool.setuptools.package-data]
+"enfinitos_auditor" = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
