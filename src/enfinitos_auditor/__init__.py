@@ -32,6 +32,13 @@ from .proof_pack import (
     verify_proof_record,
 )
 from .settlement_audit import verify_settlement_reconciliation
+from .tenant_chain import (
+    TENANT_CHAIN_VERSION,
+    TenantChainedRecord,
+    canonicalise_tenant_chain_link,
+    genesis_chain_tip,
+    verify_tenant_chain,
+)
 from .types import (
     SDK_VERSION,
     SUPPORTED_ENVELOPE_VERSIONS,
@@ -79,6 +86,8 @@ __all__ = [
     "SettlementLine",
     "SettlementSummary",
     "SignedProofPack",
+    "TENANT_CHAIN_VERSION",
+    "TenantChainedRecord",
     "VerificationKey",
     "base64url_decode",
     "base64url_encode",
