@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "enfinitos-sdk-auditor"
+version = "0.0.1"
+description = "EnfinitOS Auditor/Verifier SDK (Python) — cryptographic verification library that regulators, auditors, courts, and third parties use to verify signed proof packs issued by EnfinitOS without trusting the vendor. Parses signed proof packs, verifies Ed25519 signatures against published verification keys, walks the proof hash-chain, re-projects proof into metering, and re-computes settlement reconciliation."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "EnfinitOS" }]
+keywords = ["audit", "verification", "proof", "ed25519", "hash-chain", "compliance", "enfinitos"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security :: Cryptography",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+dependencies = [
+    "cryptography>=44",
+    "httpx>=0.28",
+]
+
+[project.urls]
+Homepage = "https://github.com/enfinitos/auditor"
+Issues = "https://github.com/enfinitos/auditor/issues"
+Source = "https://github.com/enfinitos/auditor"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# Ship the py.typed marker so downstream type-checkers (mypy / pyright)
+# treat the package as typed per PEP 561.
+[tool.setuptools.package-data]
+"enfinitos_auditor" = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
