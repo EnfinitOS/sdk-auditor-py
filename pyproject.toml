@@ -28,9 +28,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/enfinitos/auditor"
-Issues = "https://github.com/enfinitos/auditor/issues"
-Source = "https://github.com/enfinitos/auditor"
+Homepage = "https://github.com/EnfinitOS/sdk-auditor-py"
+Issues = "https://github.com/EnfinitOS/sdk-auditor-py/issues"
+Source = "https://github.com/EnfinitOS/sdk-auditor-py"
 
 [project.optional-dependencies]
 dev = [
