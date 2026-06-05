@@ -167,7 +167,20 @@ class MeteringSummary:
     totals: Optional[Dict[str, str]] = None
 
 
-SettlementPartyRole = Literal["TENANT", "VENUE", "CUSTOMER", "PLATFORM"]
+# Full role union per the May-2026 enterprise settlement rebuild —
+# counterparty-addressed splits can pay agencies, affiliates,
+# resellers, and tax authorities. The audit logic is role-agnostic;
+# this stays in field-for-field parity with sandbox-core + auditor-ts.
+SettlementPartyRole = Literal[
+    "TENANT",
+    "VENUE",
+    "CUSTOMER",
+    "PLATFORM",
+    "AGENCY",
+    "AFFILIATE",
+    "RESELLER",
+    "TAX_AUTHORITY",
+]
 SettlementStatus = Literal["PROJECTED", "ACCEPTED", "POSTED", "VOID"]
 
 
