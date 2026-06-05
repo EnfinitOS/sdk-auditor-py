@@ -45,7 +45,7 @@ SUPPORTED_ENVELOPE_VERSIONS: Tuple[str, ...] = ("envelope.v1",)
 SUPPORTED_SIGNATURE_ALGORITHMS: Tuple[str, ...] = ("ed25519",)
 
 # Stamped onto every AuditReport.
-SDK_VERSION: str = "0.0.1"
+SDK_VERSION: str = "0.0.2"
 
 EnvelopeVersion = str
 SignatureAlgorithm = Literal["ed25519"]
@@ -121,6 +121,103 @@ class ProofRecord:
     payload_canonical: str
     before_hash: Optional[str]
     after_hash: str
+
+
+# ---------------------------------------------------------------------
+# Rights-provenance records — Wave 14 write-time signing contract
+# ---------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ProvenanceRecord:
+    """One rights-provenance ledger entry as the platform's proof read
+    surface emits it (apps/api/src/modules/proof/decoder.ts →
+    ProofRecord, proof.v1).
+
+    This is a DIFFERENT artefact from the spatial-chain
+    :class:`ProofRecord` above: that one wraps a ProofReceiptPayload
+    signed over a canonical-JSON encoding; this one is a rights
+    lifecycle event (basis assert/verify/reject, right issue/suspend/
+    resume/revoke/expire, offer propose/accept/counter/reject/
+    withdraw/expire, challenge open/resolve/withdraw) signed over a
+    flat pipe-delimited canonical string::
+
+        "rightProvenance.v1|<orgId>|<eventType>|<rightId|->|<basisId|->|
+         <offerId|->|<beforeHash|->|<afterHash|->|<keyId>"
+
+    where ``-`` encodes an absent field. The hand-rolled form is what
+    lets TS / Rust / Python verifiers reconstruct the signed bytes
+    without sharing a canonical-JSON library.
+
+    Signature presence is per-record:
+      - ``signature_algorithm == "ed25519"`` → write-time signed.
+        ``signature`` is the base64url (unpadded) 64-byte Ed25519
+        signature; ``signer_key_id`` matches a
+        :class:`VerificationKey`. ``payload_canonical`` carries the
+        exact signed string as a transparency aid — the SDK re-derives
+        it from the raw fields and asserts byte-equality before
+        verifying.
+      - ``signature_algorithm == "hmac-sha256"`` → legacy
+        (pre-Wave-14) record. Read-time transport HMAC only; the
+        verifier reports PROVENANCE_UNSIGNED_RECORD as an
+        informational SKIPPED step, never INVALID — published
+        0.0.1-era exports keep verifying.
+    """
+
+    #: Stable record id (the RightProvenance row id).
+    proof_id: str
+    #: Tenant the record belongs to. Part of the signing input.
+    org_id: str
+    #: The platform's raw lifecycle event tag (e.g. RIGHT_ISSUED).
+    #: Part of the signing input. NOTE: this is NOT the proof
+    #: surface's collapsed 10-value ``type`` taxonomy — the wire field
+    #: is ``provenanceEventType``.
+    provenance_event_type: str
+    #: ISO-8601 — when the event was recorded. Drives key-validity
+    #: checks (plays the role of issued_at).
+    occurred_at: str
+    #: Entity pointers — each part of the signing input; None when absent.
+    right_id: Optional[str]
+    basis_id: Optional[str]
+    offer_id: Optional[str]
+    #: Raw entity-chain hashes exactly as persisted (typically
+    #: ``sha256:<hex>``-prefixed; None on auxiliary birth rows). Wire
+    #: fields are ``provenanceBeforeHash`` / ``provenanceAfterHash``.
+    provenance_before_hash: Optional[str]
+    provenance_after_hash: Optional[str]
+    #: "ed25519" (write-time signed) or "hmac-sha256" (legacy).
+    signature_algorithm: Literal["ed25519", "hmac-sha256"]
+    #: For ed25519 records: base64url (unpadded) 64-byte Ed25519
+    #: signature over the canonical signing input. For hmac-sha256
+    #: records: the platform's transport HMAC (hex) — opaque to the SDK.
+    signature: str
+    #: For ed25519 records: the signing key id, resolvable in the
+    #: published verification-key directory. For hmac-sha256 records:
+    #: the synthetic ``ledger.v1.<orgId>`` tag.
+    signer_key_id: str
+    #: For ed25519 records: the exact canonical string that was
+    #: signed. None on legacy records.
+    payload_canonical: Optional[str]
+
+
+@dataclass
+class ProvenanceAuditReport:
+    """``verify_provenance_chain`` output.
+
+    Same shape family as :class:`ChainAuditReport`, with the
+    signed/unsigned partition surfaced so a regulator can quote
+    "N of M records carry write-time signatures" directly.
+    """
+
+    status: AuditStepStatus
+    verified_at: str
+    sdk_version: str
+    record_count: int
+    #: Records carrying a write-time Ed25519 signature.
+    signed_record_count: int
+    #: Legacy records (read-time HMAC only) — informational.
+    unsigned_record_count: int
+    steps: List[AuditStep]
 
 
 MeterUnitType = Literal[
@@ -298,6 +395,14 @@ AuditReasonCode = Literal[
     "SETTLEMENT_IDEM_KEY_MISMATCH",
     "SETTLEMENT_TOTAL_MISMATCH",
     "SETTLEMENT_ORG_MISMATCH",
+    # Rights-provenance write-time signing (Wave 14 Phase 2). Additive —
+    # packs/exports produced before the platform shipped write-time
+    # provenance signing never trip these.
+    "PROVENANCE_SIGNATURE_INVALID",
+    "PROVENANCE_SIGNATURE_MALFORMED",
+    "PROVENANCE_CANONICAL_MISMATCH",
+    "PROVENANCE_UNSIGNED_RECORD",
+    "PROVENANCE_ORG_MISMATCH",
     # Keys
     "KEYS_FETCH_FAILED",
     "KEYS_RESPONSE_MALFORMED",
@@ -313,6 +418,8 @@ AuditStepKind = Literal[
     "settlement_line",
     "settlement_total",
     "key_lookup",
+    # Wave 14 Phase 2 — rights-provenance write-time signature checks.
+    "provenance_signature",
 ]
 
 
@@ -408,6 +515,8 @@ __all__ = [
     "ProofPack",
     "ProofReceiptPayload",
     "ProofRecord",
+    "ProvenanceAuditReport",
+    "ProvenanceRecord",
     "SDK_VERSION",
     "SUPPORTED_ENVELOPE_VERSIONS",
     "SUPPORTED_SIGNATURE_ALGORITHMS",

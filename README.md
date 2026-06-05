@@ -5,11 +5,45 @@ verification library that regulators, auditors, courts, and third-party
 compliance tools use to verify signed proof packs issued by EnfinitOS,
 **without having to trust EnfinitOS as a vendor**.
 
-Python port of the reference [`@enfinitos/sdk-auditor`](../auditor-ts/)
-TypeScript implementation. The wire shapes, canonicalisation rules,
-and verification semantics are deliberately identical: a regulator
-auditing the same proof pack with either SDK MUST get the same
-VALID/INVALID verdict on every step.
+Python port of the reference
+[`@enfinitos/sdk-auditor`](https://github.com/EnfinitOS/sdk-auditor-ts)
+TypeScript implementation (a
+[Rust port](https://github.com/EnfinitOS/sdk-auditor-rs) also
+exists). The wire shapes, canonicalisation rules, and verification
+semantics are deliberately identical: a regulator auditing the same
+proof pack with any of the SDKs MUST get the same VALID/INVALID
+verdict on every step.
+
+## What's new in 0.0.2
+
+**Rights-provenance write-time signature verification.** The platform
+now Ed25519-signs every rights-provenance ledger row at write time
+(basis, right, offer, and challenge lifecycle events); 0.0.2 ships
+the independent verifier:
+
+```python
+from enfinitos_auditor import verify_provenance_chain
+
+report = verify_provenance_chain(
+    export_archive_records,      # list[ProvenanceRecord] from /proof/export
+    pinned_keys,                 # list[VerificationKey] or a KeyDirectory
+    expected_org_id="org_abc",
+)
+report.status                    # "VALID" | "INVALID" | "SKIPPED"
+report.signed_record_count      # write-time-signed records
+report.unsigned_record_count    # legacy (pre-write-time) records
+```
+
+Legacy records (pre-write-time signing,
+`signature_algorithm == "hmac-sha256"`) surface as informational
+SKIPPED findings — never INVALID — so 0.0.1-era exports keep
+verifying. Also in 0.0.2: `SettlementPartyRole` widened to the
+platform's full 8-role union (`AGENCY`, `AFFILIATE`, `RESELLER`,
+`TAX_AUTHORITY` added), and packaging metadata moved to the modern
+setuptools contract (SPDX `license = "MIT"`, `setuptools>=77`, no
+deprecated `License ::` classifier). See
+[CHANGELOG.md](https://github.com/EnfinitOS/sdk-auditor-py/blob/main/CHANGELOG.md)
+for the full release notes.
 
 ## The trust model
 
@@ -63,7 +97,7 @@ pip install enfinitos-sdk-auditor
 In an air-gapped environment, install from a wheel:
 
 ```bash
-pip install ./enfinitos_sdk_auditor-0.0.1-py3-none-any.whl --no-deps
+pip install ./enfinitos_sdk_auditor-0.0.2-py3-none-any.whl --no-deps
 pip install cryptography httpx  # transitive deps
 ```
 
@@ -288,9 +322,10 @@ Two failure classes (identical to TS):
    with a stable `code` (`INVALID_INPUT`, `KEYS_UNAVAILABLE`,
    `KEYS_MALFORMED`, `PLATFORM_RESPONSE`, `INTERNAL`).
 
-See the [TypeScript README](../auditor-ts/README.md#error-model) for
-the full stable reason-code table — every code is identical between
-the two SDKs.
+See the
+[TypeScript README](https://github.com/EnfinitOS/sdk-auditor-ts#error-model)
+for the full stable reason-code table — every code is identical
+across the SDKs.
 
 ## Offline / pinned-key audit
 

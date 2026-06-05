@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "enfinitos-sdk-auditor"
-version = "0.0.1"
+version = "0.0.2"
 description = "EnfinitOS Auditor/Verifier SDK (Python) — cryptographic verification library that regulators, auditors, courts, and third parties use to verify signed proof packs issued by EnfinitOS without trusting the vendor. Parses signed proof packs, verifies Ed25519 signatures against published verification keys, walks the proof hash-chain, re-projects proof into metering, and re-computes settlement reconciliation."
 readme = "README.md"
 requires-python = ">=3.10"

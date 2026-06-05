@@ -27,11 +27,16 @@ from enfinitos_auditor.hashing import (
     settlement_idem_key as build_settlement_idem_key,
     sha256_hex,
 )
+from enfinitos_auditor.provenance import (
+    ProvenanceSigningFields,
+    canonicalise_provenance_signing_input,
+)
 from enfinitos_auditor.types import (
     MeterRecord,
     MeteringSummary,
     ProofReceiptPayload,
     ProofRecord,
+    ProvenanceRecord,
     SettlementLine,
     SettlementSummary,
     SettlementTotals,
@@ -244,6 +249,66 @@ def build_settlement_summary(metering: MeteringSummary) -> SettlementSummary:
             net_to_tenant_cents=total_gross,
             platform_fee_cents=0,
         ),
+    )
+
+
+def sign_provenance_record(
+    fields: ProvenanceSigningFields,
+    key: GeneratedKey,
+    occurred_at: str = "2026-05-29T12:00:00.000Z",
+    proof_id: Optional[str] = None,
+) -> ProvenanceRecord:
+    """Produce a write-time-signed rights-provenance record.
+
+    Mirrors the platform's apps/api/src/modules/rights/
+    provenanceSigner.ts ``signProvenance`` path byte-for-byte:
+    canonical pipe-delimited signing input, raw 64-byte Ed25519
+    signature, base64url unpadded. Same helper name family as the TS
+    ``signProvenanceRecord`` fixture.
+    """
+
+    payload_canonical = canonicalise_provenance_signing_input(fields, key.key_id)
+    signature_bytes = key.private_key.sign(payload_canonical.encode("utf-8"))
+    return ProvenanceRecord(
+        proof_id=proof_id or "rp_" + secrets.token_hex(4),
+        org_id=fields.org_id,
+        provenance_event_type=fields.event_type,
+        occurred_at=occurred_at,
+        right_id=fields.right_id,
+        basis_id=fields.basis_id,
+        offer_id=fields.offer_id,
+        provenance_before_hash=fields.before_hash,
+        provenance_after_hash=fields.after_hash,
+        signature_algorithm="ed25519",
+        signature=base64url_encode(signature_bytes),
+        signer_key_id=key.key_id,
+        payload_canonical=payload_canonical,
+    )
+
+
+def build_legacy_provenance_record(
+    org_id: str = "org_test",
+    provenance_event_type: str = "RIGHT_ISSUED",
+) -> ProvenanceRecord:
+    """A pre-Wave-14 record carrying only the platform's read-time
+    transport HMAC. Not independently verifiable; the verifier reports
+    it as an informational PROVENANCE_UNSIGNED_RECORD finding.
+    """
+
+    return ProvenanceRecord(
+        proof_id="rp_legacy_" + secrets.token_hex(4),
+        org_id=org_id,
+        provenance_event_type=provenance_event_type,
+        occurred_at="2026-03-01T12:00:00.000Z",
+        right_id="rgh_legacy",
+        basis_id=None,
+        offer_id=None,
+        provenance_before_hash=None,
+        provenance_after_hash="sha256:" + "a" * 64,
+        signature_algorithm="hmac-sha256",
+        signature="c0ffee" * 10 + "abcd",
+        signer_key_id=f"ledger.v1.{org_id}",
+        payload_canonical=None,
     )
 
 

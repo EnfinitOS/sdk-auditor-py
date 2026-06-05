@@ -31,6 +31,17 @@ from .proof_pack import (
     parse_signed_proof_pack,
     verify_proof_record,
 )
+
+# Wave 14 Phase 2 — rights-provenance write-time signature
+# verification. Verifies WHO signed each rights lifecycle record;
+# pair with verify_tenant_chain (position) for the full posture.
+from .provenance import (
+    PROVENANCE_SIGNING_VERSION,
+    ProvenanceSigningFields,
+    canonicalise_provenance_signing_input,
+    verify_provenance_chain,
+    verify_provenance_record,
+)
 from .settlement_audit import verify_settlement_reconciliation
 from .tenant_chain import (
     TENANT_CHAIN_VERSION,
@@ -55,6 +66,8 @@ from .types import (
     ProofPack,
     ProofReceiptPayload,
     ProofRecord,
+    ProvenanceAuditReport,
+    ProvenanceRecord,
     SettlementAuditReport,
     SettlementLine,
     SettlementSummary,
@@ -75,10 +88,14 @@ __all__ = [
     "KeyDirectory",
     "MeterRecord",
     "MeteringSummary",
+    "PROVENANCE_SIGNING_VERSION",
     "ProjectionAuditReport",
     "ProofPack",
     "ProofReceiptPayload",
     "ProofRecord",
+    "ProvenanceAuditReport",
+    "ProvenanceRecord",
+    "ProvenanceSigningFields",
     "SDK_VERSION",
     "SUPPORTED_ENVELOPE_VERSIONS",
     "SUPPORTED_SIGNATURE_ALGORITHMS",
@@ -94,6 +111,7 @@ __all__ = [
     "canonical_sort_keys",
     "canonicalise_proof_payload",
     "canonicalise_proof_signing_input",
+    "canonicalise_provenance_signing_input",
     "constant_time_equal",
     "load_key_directory",
     "meter_idem_key",
@@ -105,5 +123,7 @@ __all__ = [
     "verify_metering_projection",
     "verify_proof_chain",
     "verify_proof_record",
+    "verify_provenance_chain",
+    "verify_provenance_record",
     "verify_settlement_reconciliation",
 ]
