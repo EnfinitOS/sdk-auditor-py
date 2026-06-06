@@ -10,6 +10,7 @@ src/enfinitos_auditor/keys.py
 src/enfinitos_auditor/metering_audit.py
 src/enfinitos_auditor/proof_chain.py
 src/enfinitos_auditor/proof_pack.py
+src/enfinitos_auditor/provenance.py
 src/enfinitos_auditor/py.typed
 src/enfinitos_auditor/settlement_audit.py
 src/enfinitos_auditor/tenant_chain.py
@@ -25,4 +26,5 @@ tests/test_keys.py
 tests/test_metering_audit.py
 tests/test_proof_chain.py
 tests/test_proof_pack.py
+tests/test_provenance.py
 tests/test_settlement_audit.py
