@@ -28,6 +28,7 @@ import base64
 import hashlib
 import json
 import math
+import re
 from typing import Any, Dict, Iterable, List, Tuple
 
 from .types import ProofReceiptPayload
@@ -167,6 +168,49 @@ def base64url_decode(s: str) -> bytes:
     return base64.urlsafe_b64decode(padded.encode("ascii"))
 
 
+_BASE64URL_ALPHABET = re.compile(r"^[A-Za-z0-9_-]*$")
+
+
+def base64url_decode_strict(s: str) -> bytes:
+    """Strict base64url-decode (RFC 4648 §5) — exact parity with the
+    TS reference's ``base64UrlDecode``.
+
+    Rejects, with a stable message:
+      - whitespace anywhere in the input (malleability surface)
+      - explicit padding (``=``) — every EnfinitOS signer emits
+        unpadded base64url; accepting padded input would let the same
+        logical signature have two different wire spellings
+      - characters outside the base64url alphabet ``[A-Za-z0-9_-]``
+      - lengths with ``len % 4 == 1`` (cannot represent a byte
+        sequence)
+
+    Used by the provenance verifier; the permissive
+    :func:`base64url_decode` above is kept for the pre-0.0.2 receipt
+    path's behaviour. (Note: stdlib ``base64.urlsafe_b64decode``
+    silently DISCARDS invalid characters unless ``validate=True``, so
+    a strict gate is mandatory for parity with the TS decoder.)
+    """
+
+    if not isinstance(s, str):
+        raise ValueError("base64url_decode_strict: input must be a string")
+    if any(c.isspace() for c in s):
+        raise ValueError(
+            "base64url_decode_strict: whitespace not allowed in base64url"
+        )
+    if "=" in s:
+        raise ValueError(
+            "base64url_decode_strict: padding ('=') not allowed; "
+            "use unpadded base64url"
+        )
+    if not _BASE64URL_ALPHABET.match(s):
+        raise ValueError("base64url_decode_strict: invalid base64url character")
+    if len(s) % 4 == 1:
+        raise ValueError("base64url_decode_strict: invalid length (mod 4 == 1)")
+    padding_needed = (4 - (len(s) % 4)) % 4
+    padded = s + ("=" * padding_needed)
+    return base64.urlsafe_b64decode(padded.encode("ascii"))
+
+
 # ---------------------------------------------------------------------
 # sha256 / prefixed
 # ---------------------------------------------------------------------
@@ -194,6 +238,7 @@ def wire_to_python(field: str) -> str:
 __all__ = [
     "PROOF_PAYLOAD_FIELDS",
     "base64url_decode",
+    "base64url_decode_strict",
     "base64url_encode",
     "canonical_sort_keys",
     "canonicalise_proof_payload",
