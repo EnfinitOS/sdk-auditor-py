@@ -21,7 +21,7 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from .canonical_json import (
-    base64url_decode,
+    base64url_decode_strict,
     canonicalise_proof_payload,
     canonicalise_proof_signing_input,
 )
@@ -413,8 +413,11 @@ def verify_proof_record(
 
     # 4. Signature verification.
     try:
-        sig_bytes = base64url_decode(record.signature)
-        pub_bytes = base64url_decode(lookup.key.public_key)
+        # CRYPTO-05: strict base64url — reject malformed signature/public-key
+        # strings rather than letting stdlib silently drop invalid characters.
+        # Parity with the provenance path and the TS/Rust reference decoders.
+        sig_bytes = base64url_decode_strict(record.signature)
+        pub_bytes = base64url_decode_strict(lookup.key.public_key)
     except Exception as exc:
         steps.append(
             AuditStep(
