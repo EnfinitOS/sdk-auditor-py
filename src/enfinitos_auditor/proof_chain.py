@@ -146,6 +146,43 @@ def verify_proof_chain(records: List[ProofRecord]) -> ChainAuditReport:
             )
         prev_issued_at_ms = curr_issued_at_ms
 
+    # 4. Nonce uniqueness (CRYPTO-07). The platform enforces
+    # @@unique([orgId, nonce]); a repeated nonce inside a pack means a replayed
+    # or duplicated receipt — which the hash-chain walk alone won't catch if a
+    # duplicate is spliced in with a fresh beforeHash.
+    seen_nonce: dict[str, int] = {}
+    nonce_reuse = 0
+    for i, rec in enumerate(records):
+        nonce = rec.payload.nonce
+        first_idx = seen_nonce.get(nonce)
+        if first_idx is not None:
+            nonce_reuse += 1
+            steps.append(
+                AuditStep(
+                    target=f"records[{i}].payload.nonce",
+                    kind="chain_link",
+                    status="INVALID",
+                    reason="CHAIN_NONCE_REUSED",
+                    message=(
+                        f"record[{i}] reuses a nonce first seen at record[{first_idx}] "
+                        "— per-org nonce uniqueness is enforced; a repeat indicates a "
+                        "replayed or duplicated receipt"
+                    ),
+                    detail={"firstIndex": first_idx, "duplicateIndex": i},
+                )
+            )
+        else:
+            seen_nonce[nonce] = i
+    if nonce_reuse == 0:
+        steps.append(
+            AuditStep(
+                target="records[].payload.nonce",
+                kind="chain_link",
+                status="VALID",
+                message=f"all {len(records)} record nonces are unique",
+            )
+        )
+
     any_invalid = any(s.status == "INVALID" for s in steps)
     return ChainAuditReport(
         status="INVALID" if any_invalid else "VALID",

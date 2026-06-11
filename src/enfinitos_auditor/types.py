@@ -386,6 +386,7 @@ AuditReasonCode = Literal[
     "GENESIS_BEFORE_HASH_NOT_NULL",
     "CHAIN_LINK_MISMATCH",
     "CHAIN_OUT_OF_ORDER",
+    "CHAIN_NONCE_REUSED",
     # Metering re-projection
     "METER_RECORD_FOR_UNKNOWN_PROOF",
     "METER_UNIT_COUNT_MISMATCH",
