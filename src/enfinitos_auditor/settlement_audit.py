@@ -10,8 +10,8 @@ Mirrors the TS ``settlementAudit.ts``. Given a MeteringSummary
      (SETTLEMENT_SHARE_SUM_NOT_ONE).
   4. amountCents = round(grossAmountCents * share) within rounding
      tolerance (SETTLEMENT_AMOUNT_MISMATCH).
-  5. line.idem_key = sha256(meter.idem_key|party_role)
-     (SETTLEMENT_IDEM_KEY_MISMATCH).
+  5. line.idem_key = sha256(meter.idem_key|party_role|ledger_account_code)
+     (SETTLEMENT_IDEM_KEY_MISMATCH) — settlement.v2 3-field content hash.
   6. Totals reconcile if provided (SETTLEMENT_TOTAL_MISMATCH).
 
 Rounding policy
@@ -103,8 +103,10 @@ def verify_settlement_reconciliation(
             )
             continue
 
-        # 5. idemKey reconstruction.
-        expected_idem = settlement_idem_key(line.meter_record_idem_key, line.party_role)
+        # 5. idemKey reconstruction (settlement.v2 — 3-field content hash).
+        expected_idem = settlement_idem_key(
+            line.meter_record_idem_key, line.party_role, line.ledger_account_code
+        )
         if line.idem_key != expected_idem:
             steps.append(
                 AuditStep(
@@ -114,7 +116,7 @@ def verify_settlement_reconciliation(
                     reason="SETTLEMENT_IDEM_KEY_MISMATCH",
                     message=(
                         "settlement-line idemKey does not equal "
-                        "sha256(meterIdemKey|partyRole)"
+                        "sha256(meterIdemKey|partyRole|ledgerAccountCode)"
                     ),
                     detail={"expected": expected_idem, "actual": line.idem_key},
                 )

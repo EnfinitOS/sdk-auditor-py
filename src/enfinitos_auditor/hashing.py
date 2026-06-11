@@ -6,7 +6,8 @@ Same three sha256 flavours as the TypeScript port:
      bare hex. Matches the proof receipt's ``afterHash`` field.
   2. **Prefixed hex** — ``"sha256:<hex>"`` for rights/basis/offer chains.
   3. **Meter idem key** — ``sha256(f"{proof_receipt_id}|{unit_type}")``.
-  4. **Settlement idem key** — ``sha256(f"{meter_idem_key}|{party_role}")``.
+  4. **Settlement idem key** — ``sha256(f"{meter_idem_key}|{party_role}|
+     {ledger_account_code}")`` (``settlement.v2``, 3-field content hash).
 
 Why these stay as separate named helpers
 ----------------------------------------
@@ -41,13 +42,17 @@ def meter_idem_key(proof_receipt_id: str, unit_type: str) -> str:
     return sha256_hex(f"{proof_receipt_id}|{unit_type}")
 
 
-def settlement_idem_key(meter_record_idem_key: str, party_role: str) -> str:
+def settlement_idem_key(
+    meter_record_idem_key: str, party_role: str, ledger_account_code: str
+) -> str:
     """Reconstruct a settlement line's idem key from its inputs.
 
-    Mirrors the platform's ``settlementService.ts`` formula.
+    Mirrors the platform's ``settlementService.ts`` formula
+    (``settlement.v2`` — 3-field content hash):
+    ``sha256(meterRecordIdemKey|partyRole|ledgerAccountCode)``.
     """
 
-    return sha256_hex(f"{meter_record_idem_key}|{party_role}")
+    return sha256_hex(f"{meter_record_idem_key}|{party_role}|{ledger_account_code}")
 
 
 def constant_time_equal(a: bytes, b: bytes) -> bool:

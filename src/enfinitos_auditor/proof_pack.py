@@ -219,10 +219,11 @@ def _parse_metering_summary(raw: Any) -> MeteringSummary:
 def _parse_settlement_summary(raw: Any) -> SettlementSummary:
     if not isinstance(raw, dict):
         raise AuditorError("INVALID_INPUT", "settlement must be an object")
-    if raw.get("schemaVersion") != "settlement.v1":
+    schema_version = raw.get("schemaVersion")
+    if schema_version not in ("settlement.v1", "settlement.v2"):
         raise AuditorError(
             "INVALID_INPUT",
-            f"unsupported settlement schemaVersion {raw.get('schemaVersion')!r}",
+            f"unsupported settlement schemaVersion {schema_version!r}",
         )
     lines: List[SettlementLine] = []
     for r in raw.get("lines", []):
@@ -247,7 +248,7 @@ def _parse_settlement_summary(raw: Any) -> SettlementSummary:
             platform_fee_cents=int(totals_raw["platformFeeCents"]),
         )
     return SettlementSummary(
-        schema_version="settlement.v1",
+        schema_version=schema_version,
         org_id=raw["orgId"],
         period_start=raw["periodStart"],
         period_end=raw["periodEnd"],

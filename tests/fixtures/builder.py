@@ -225,7 +225,9 @@ def build_settlement_summary(metering: MeteringSummary) -> SettlementSummary:
         meter_gross[m.idem_key] = gross
         lines.append(
             SettlementLine(
-                idem_key=build_settlement_idem_key(m.idem_key, "TENANT"),
+                idem_key=build_settlement_idem_key(
+                    m.idem_key, "TENANT", "SPATIAL_REVENUE_GROSS"
+                ),
                 meter_record_idem_key=m.idem_key,
                 party_role="TENANT",
                 share="1.000000",
@@ -237,7 +239,7 @@ def build_settlement_summary(metering: MeteringSummary) -> SettlementSummary:
         )
     total_gross = sum(l.amount_cents for l in lines)
     return SettlementSummary(
-        schema_version="settlement.v1",
+        schema_version="settlement.v2",
         org_id=metering.org_id,
         period_start=metering.period_start,
         period_end=metering.period_end,

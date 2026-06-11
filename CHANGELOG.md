@@ -5,6 +5,36 @@ TypeScript implementation (`@enfinitos/sdk-auditor` on npm)
 release-for-release with identical wire shapes, reason codes, and
 verdicts.
 
+## 0.0.3 — 2026-06-11
+
+### Changed (BREAKING — settlement reconciliation)
+
+- **Settlement idemKey is now a 3-field content hash** (`settlement.v2`,
+  CRYPTO-01). `settlement_idem_key(...)` takes a third argument,
+  `ledger_account_code`, and hashes
+  `sha256(meterRecordIdemKey|partyRole|ledgerAccountCode)` instead of
+  the previous 2-field `sha256(meterRecordIdemKey|partyRole)`. This
+  binds each settlement line to the ledger account it posts to, so two
+  lines that differ only by ledger account no longer collide on the
+  same idemKey. Byte-identical to the TypeScript and Rust references.
+- `verify_settlement_reconciliation` re-derives each line's idemKey
+  with all three fields (the settlement line already carries
+  `ledger_account_code`). The `SETTLEMENT_IDEM_KEY_MISMATCH` message
+  now reads `sha256(meterIdemKey|partyRole|ledgerAccountCode)`.
+- `SettlementSummary.schema_version` now accepts `"settlement.v2"`
+  alongside `"settlement.v1"`; the proof-pack parser accepts and
+  preserves either value. Amount/rounding logic is unchanged
+  (floor + largest-share residual absorption, same rounding
+  tolerance).
+
+### Migration
+
+- A `settlement.v1` summary whose lines were idem-keyed with the old
+  2-field formula will now report `SETTLEMENT_IDEM_KEY_MISMATCH`
+  against the 3-field re-derivation. Re-export settlement summaries
+  from a platform on `settlement.v2`. Receipt, chain, metering, and
+  provenance verification are untouched.
+
 ## 0.0.2 — 2026-06-05
 
 ### Added

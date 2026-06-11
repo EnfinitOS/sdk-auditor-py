@@ -14,6 +14,20 @@ semantics are deliberately identical: a regulator auditing the same
 proof pack with any of the SDKs MUST get the same VALID/INVALID
 verdict on every step.
 
+## What's new in 0.0.3
+
+**Settlement idemKey is now a 3-field content hash** (`settlement.v2`,
+BREAKING). Each settlement line's idemKey is
+`sha256(meterRecordIdemKey|partyRole|ledgerAccountCode)` — up from the
+previous 2-field `sha256(meterRecordIdemKey|partyRole)` — binding the
+line to the ledger account it posts to so lines differing only by
+ledger account no longer collide. `SettlementSummary.schema_version`
+accepts `"settlement.v2"` (and still `"settlement.v1"` at the parse
+boundary). Amounts/rounding are unchanged. Byte-identical to the
+TypeScript and Rust references. See
+[CHANGELOG.md](https://github.com/EnfinitOS/sdk-auditor-py/blob/main/CHANGELOG.md)
+for migration notes.
+
 ## What's new in 0.0.2
 
 **Rights-provenance write-time signature verification.** The platform

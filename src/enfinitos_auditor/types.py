@@ -45,7 +45,7 @@ SUPPORTED_ENVELOPE_VERSIONS: Tuple[str, ...] = ("envelope.v1",)
 SUPPORTED_SIGNATURE_ALGORITHMS: Tuple[str, ...] = ("ed25519",)
 
 # Stamped onto every AuditReport.
-SDK_VERSION: str = "0.0.2"
+SDK_VERSION: str = "0.0.3"
 
 EnvelopeVersion = str
 SignatureAlgorithm = Literal["ed25519"]
@@ -302,7 +302,11 @@ class SettlementTotals:
 
 @dataclass
 class SettlementSummary:
-    schema_version: Literal["settlement.v1"]
+    # ``settlement.v2`` is the current shape: the line idemKey is the
+    # 3-field content hash sha256(meterRecordIdemKey|partyRole|
+    # ledgerAccountCode). ``settlement.v1`` (2-field idemKey) is still
+    # accepted for back-compat at the parse boundary.
+    schema_version: Literal["settlement.v1", "settlement.v2"]
     org_id: str
     period_start: str
     period_end: str

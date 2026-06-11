@@ -357,7 +357,7 @@ def test_report_stamps_sdk_version_and_counts() -> None:
     key = generate_key()
     record = sign_provenance_record(_issued_fields(), key)
     report = verify_provenance_chain([record], [key.verification_key])
-    assert report.sdk_version == "0.0.2"
+    assert report.sdk_version == "0.0.3"
     assert report.record_count == 1
     assert report.signed_record_count == 1
     assert report.unsigned_record_count == 0
