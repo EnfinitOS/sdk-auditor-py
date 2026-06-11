@@ -8,8 +8,9 @@ Mirrors the TS ``settlementAudit.ts``. Given a MeteringSummary
      (SETTLEMENT_LINE_FOR_UNKNOWN_METER).
   3. Per-meter shares sum to exactly 1.000000
      (SETTLEMENT_SHARE_SUM_NOT_ONE).
-  4. amountCents = round(grossAmountCents * share) within rounding
-     tolerance (SETTLEMENT_AMOUNT_MISMATCH).
+  4. amountCents equals the deterministic integer split of
+     grossAmountCents by share, to the exact cent — no tolerance band
+     (SETTLEMENT_AMOUNT_MISMATCH).
   5. line.idem_key = sha256(meter.idem_key|party_role|ledger_account_code)
      (SETTLEMENT_IDEM_KEY_MISMATCH) — settlement.v2 3-field content hash.
   6. Totals reconcile if provided (SETTLEMENT_TOTAL_MISMATCH).
@@ -81,6 +82,28 @@ def verify_settlement_reconciliation(
     for line in settlement.lines:
         lines_by_meter.setdefault(line.meter_record_idem_key, []).append(line)
 
+    # CRYPTO-04: recompute each meter's deterministic integer split exactly
+    # (floor per share + residual reabsorbed into the largest-share line, ties
+    # broken by the smaller partyRole) — the byte-for-byte mirror of the
+    # platform's splitGrossDeterministically — and require exact-cent equality
+    # per line. No tolerance band.
+    expected_by_idx: Dict[int, int] = {}
+    idx_by_meter: Dict[str, List[int]] = {}
+    for i, line in enumerate(settlement.lines):
+        idx_by_meter.setdefault(line.meter_record_idem_key, []).append(i)
+    for meter_idem, idxs in idx_by_meter.items():
+        gross_for_meter = settlement.meter_gross.get(meter_idem)
+        if gross_for_meter is None:
+            continue  # flagged per-line below
+        shares = [
+            _parse_decimal_to_scaled_safe(settlement.lines[i].share, _SHARE_PLACES)
+            for i in idxs
+        ]
+        roles = [settlement.lines[i].party_role for i in idxs]
+        split = _deterministic_split_cents(gross_for_meter, shares, roles)
+        for k, i in enumerate(idxs):
+            expected_by_idx[i] = split[k]
+
     # 2..5: walk every line.
     computed_gross_cents = 0
     computed_net_to_tenant = 0
@@ -148,34 +171,46 @@ def verify_settlement_reconciliation(
             )
             continue
 
-        share_scaled = _parse_decimal_to_scaled(line.share, _SHARE_PLACES)
-        expected = (gross * share_scaled) // _SHARE_FACTOR
-        if expected != line.amount_cents:
-            group = lines_by_meter.get(line.meter_record_idem_key, [])
-            is_largest = all(
-                _parse_decimal_to_scaled(g.share, _SHARE_PLACES) <= share_scaled
-                for g in group
-            )
-            if not is_largest or abs(expected - line.amount_cents) > len(group):
-                steps.append(
-                    AuditStep(
-                        target=f"settlement.lines[{i}].amountCents",
-                        kind="settlement_line",
-                        status="INVALID",
-                        reason="SETTLEMENT_AMOUNT_MISMATCH",
-                        message=(
-                            "amountCents does not match floor(grossCents * share) "
-                            "within rounding tolerance"
-                        ),
-                        detail={
-                            "expected": expected,
-                            "actual": line.amount_cents,
-                            "gross": gross,
-                            "share": line.share,
-                        },
-                    )
+        # Validate the share decimal so malformed input surfaces a clear step
+        # rather than crashing the verify.
+        try:
+            _parse_decimal_to_scaled(line.share, _SHARE_PLACES)
+        except ValueError:
+            steps.append(
+                AuditStep(
+                    target=f"settlement.lines[{i}].share",
+                    kind="settlement_line",
+                    status="INVALID",
+                    reason="SETTLEMENT_AMOUNT_MISMATCH",
+                    message="share value is not a valid decimal",
                 )
-                continue
+            )
+            continue
+
+        # Exact-cent comparison against the precomputed deterministic split
+        # (CRYPTO-04) — the largest-share line carries the residual exactly,
+        # every other line is floor(gross * share). No tolerance band.
+        expected = expected_by_idx.get(i)
+        if expected != line.amount_cents:
+            steps.append(
+                AuditStep(
+                    target=f"settlement.lines[{i}].amountCents",
+                    kind="settlement_line",
+                    status="INVALID",
+                    reason="SETTLEMENT_AMOUNT_MISMATCH",
+                    message=(
+                        "amountCents does not equal the deterministic integer "
+                        "split of grossCents by share"
+                    ),
+                    detail={
+                        "expected": expected,
+                        "actual": line.amount_cents,
+                        "gross": gross,
+                        "share": line.share,
+                    },
+                )
+            )
+            continue
 
         steps.append(
             AuditStep(
@@ -183,8 +218,8 @@ def verify_settlement_reconciliation(
                 kind="settlement_line",
                 status="VALID",
                 message=(
-                    f"amountCents={line.amount_cents} matches gross={gross} * "
-                    f"share={line.share}"
+                    f"amountCents={line.amount_cents} matches deterministic split "
+                    f"of gross={gross} by share={line.share}"
                 ),
             )
         )
@@ -197,7 +232,7 @@ def verify_settlement_reconciliation(
     # 3. Per-meter share-sum check.
     for meter_idem, group in lines_by_meter.items():
         sum_scaled = sum(
-            _parse_decimal_to_scaled(line.share, _SHARE_PLACES) for line in group
+            _parse_decimal_to_scaled_safe(line.share, _SHARE_PLACES) for line in group
         )
         if sum_scaled != _SHARE_FACTOR:
             steps.append(
@@ -277,6 +312,42 @@ def _push_total_check(
                 message=f"{label}={claimed} reconciles",
             )
         )
+
+
+def _deterministic_split_cents(
+    gross: int, shares_scaled: List[int], party_roles: List[str]
+) -> List[int]:
+    """Mirror of the platform's ``splitGrossDeterministically``.
+
+    Floors each share's slice as ``floor(gross * shareScaled / 1_000_000)``
+    and reabsorbs the residual (``gross − Σ floors``) into the largest-share
+    line, ties broken by the smaller partyRole (lexical). Deterministic and
+    sums to exactly ``gross``.
+    """
+
+    floors = [(gross * s) // _SHARE_FACTOR for s in shares_scaled]
+    remainder = gross - sum(floors)
+    if remainder != 0 and floors:
+        target = 0
+        for i in range(1, len(shares_scaled)):
+            if shares_scaled[i] > shares_scaled[target] or (
+                shares_scaled[i] == shares_scaled[target]
+                and party_roles[i] < party_roles[target]
+            ):
+                target = i
+        floors[target] += remainder
+    return floors
+
+
+def _parse_decimal_to_scaled_safe(s: str, places: int) -> int:
+    """``_parse_decimal_to_scaled`` returning 0 on malformed input — used in
+    the deterministic-split precompute so one bad share can't abort the verify
+    before the per-line / share-sum checks surface a clear step."""
+
+    try:
+        return _parse_decimal_to_scaled(s, places)
+    except ValueError:
+        return 0
 
 
 def _parse_decimal_to_scaled(s: str, places: int) -> int:
