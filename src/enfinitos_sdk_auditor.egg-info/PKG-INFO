@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: enfinitos-sdk-auditor
-Version: 0.0.2
+Version: 0.0.3
 Summary: EnfinitOS Auditor/Verifier SDK (Python) — cryptographic verification library that regulators, auditors, courts, and third parties use to verify signed proof packs issued by EnfinitOS without trusting the vendor. Parses signed proof packs, verifies Ed25519 signatures against published verification keys, walks the proof hash-chain, re-projects proof into metering, and re-computes settlement reconciliation.
 Author: EnfinitOS
 License-Expression: MIT
@@ -40,6 +40,20 @@ exists). The wire shapes, canonicalisation rules, and verification
 semantics are deliberately identical: a regulator auditing the same
 proof pack with any of the SDKs MUST get the same VALID/INVALID
 verdict on every step.
+
+## What's new in 0.0.3
+
+**Settlement idemKey is now a 3-field content hash** (`settlement.v2`,
+BREAKING). Each settlement line's idemKey is
+`sha256(meterRecordIdemKey|partyRole|ledgerAccountCode)` — up from the
+previous 2-field `sha256(meterRecordIdemKey|partyRole)` — binding the
+line to the ledger account it posts to so lines differing only by
+ledger account no longer collide. `SettlementSummary.schema_version`
+accepts `"settlement.v2"` (and still `"settlement.v1"` at the parse
+boundary). Amounts/rounding are unchanged. Byte-identical to the
+TypeScript and Rust references. See
+[CHANGELOG.md](https://github.com/EnfinitOS/sdk-auditor-py/blob/main/CHANGELOG.md)
+for migration notes.
 
 ## What's new in 0.0.2
 
