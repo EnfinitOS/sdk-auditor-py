@@ -111,7 +111,7 @@ pip install enfinitos-sdk-auditor
 In an air-gapped environment, install from a wheel:
 
 ```bash
-pip install ./enfinitos_sdk_auditor-0.0.2-py3-none-any.whl --no-deps
+pip install ./enfinitos_sdk_auditor-0.0.3-py3-none-any.whl --no-deps
 pip install cryptography httpx  # transitive deps
 ```
 
