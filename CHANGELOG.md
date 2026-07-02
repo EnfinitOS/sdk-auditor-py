@@ -54,13 +54,14 @@ verdicts.
 
 ### Publishing note
 
-- **The published 0.0.2 packages fail every settlement.v2 pack the
-  platform now issues** (every line flags
+- **The previously published 0.0.2 package fails every settlement.v2
+  pack the platform now issues** (every line flags
   `SETTLEMENT_IDEM_KEY_MISMATCH` under the old 2-field key). 0.0.4 is
-  the minimum version that verifies current packs — republish
-  npm/PyPI/crates together and treat 0.0.2/0.0.3 as superseded.
+  the minimum version that verifies current packs. npm, PyPI, and
+  crates.io were republished together on 2026-07-02; 0.0.3 was tagged
+  in-repo only and never reached any registry.
 
-## 0.0.3 — 2026-06-11
+## 0.0.3 — 2026-06-11 (never published — first shipped in 0.0.4)
 
 ### Changed (BREAKING — settlement reconciliation)
 

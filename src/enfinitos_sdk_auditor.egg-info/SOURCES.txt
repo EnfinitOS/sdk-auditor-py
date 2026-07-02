@@ -5,6 +5,7 @@ src/enfinitos_auditor/__init__.py
 src/enfinitos_auditor/auditor.py
 src/enfinitos_auditor/canonical_json.py
 src/enfinitos_auditor/errors.py
+src/enfinitos_auditor/exports.py
 src/enfinitos_auditor/hashing.py
 src/enfinitos_auditor/keys.py
 src/enfinitos_auditor/metering_audit.py
@@ -22,6 +23,7 @@ src/enfinitos_sdk_auditor.egg-info/requires.txt
 src/enfinitos_sdk_auditor.egg-info/top_level.txt
 tests/test_auditor.py
 tests/test_canonical_json.py
+tests/test_exports.py
 tests/test_keys.py
 tests/test_metering_audit.py
 tests/test_proof_chain.py

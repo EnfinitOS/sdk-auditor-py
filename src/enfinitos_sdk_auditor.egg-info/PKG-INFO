@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: enfinitos-sdk-auditor
-Version: 0.0.3
+Version: 0.0.4
 Summary: EnfinitOS Auditor/Verifier SDK (Python) — cryptographic verification library that regulators, auditors, courts, and third parties use to verify signed proof packs issued by EnfinitOS without trusting the vendor. Parses signed proof packs, verifies Ed25519 signatures against published verification keys, walks the proof hash-chain, re-projects proof into metering, and re-computes settlement reconciliation.
 Author: EnfinitOS
 License-Expression: MIT
@@ -41,19 +41,23 @@ semantics are deliberately identical: a regulator auditing the same
 proof pack with any of the SDKs MUST get the same VALID/INVALID
 verdict on every step.
 
-## What's new in 0.0.3
+## What's new in 0.0.4
 
-**Settlement idemKey is now a 3-field content hash** (`settlement.v2`,
-BREAKING). Each settlement line's idemKey is
-`sha256(meterRecordIdemKey|partyRole|ledgerAccountCode)` — up from the
-previous 2-field `sha256(meterRecordIdemKey|partyRole)` — binding the
-line to the ledger account it posts to so lines differing only by
-ledger account no longer collide. `SettlementSummary.schema_version`
-accepts `"settlement.v2"` (and still `"settlement.v1"` at the parse
-boundary). Amounts/rounding are unchanged. Byte-identical to the
-TypeScript and Rust references. See
-[CHANGELOG.md](https://github.com/EnfinitOS/sdk-auditor-py/blob/main/CHANGELOG.md)
-for migration notes.
+**Settlement verification is version-aware (`settlement.v1` + `settlement.v2`).**
+The current settlement idemKey is 3-field and content-hash based (CRYPTO-01):
+`settlement_idem_key(meter_record_idem_key, party_role, ledger_account_code)` =
+`sha256(meterRecordIdemKey|partyRole|ledgerAccountCode)`, matching the
+production settlement engine. Packs stamped `settlement.v1` (sealed before the
+CRYPTO-01 flip) still verify: the auditor selects the legacy 2-field
+`sha256(meterRecordIdemKey|partyRole)` reconstruction
+(`settlement_idem_key_v1`) by the summary's `schema_version` (VER-02), so
+genuine historical evidence is never reported as tampered. **Cross-pack
+chains** verify via the new `prior_after_hash` argument on
+`verify_proof_chain` / `AuditBundle` — pass the previous pack's tail
+`after_hash` when verifying a later pack in a tenant's chain (the platform
+seals packs in series). **Signed exports** (`?export=true` metering/settlement
+envelopes) verify offline via `verify_signed_export`. See
+[CHANGELOG.md](https://github.com/EnfinitOS/sdk-auditor-py/blob/main/CHANGELOG.md).
 
 ## What's new in 0.0.2
 
@@ -114,7 +118,8 @@ The trust model is **"don't trust us — verify"**:
    projection formulae and re-derives them, asserting equality.
 
 4. **Settlement is a pure projection of metering.** Same logic — a
-   share table, a gross price per unit, banker's rounding. The
+   share table, a gross price per unit, a deterministic integer split
+   (floor per share, residual absorbed by the largest-share line). The
    auditor SDK ships the same formulae and reconciles.
 
 5. **The auditor has the full canonical-JSON encoder.** Whatever we
@@ -138,7 +143,7 @@ pip install enfinitos-sdk-auditor
 In an air-gapped environment, install from a wheel:
 
 ```bash
-pip install ./enfinitos_sdk_auditor-0.0.2-py3-none-any.whl --no-deps
+pip install ./enfinitos_sdk_auditor-0.0.4-py3-none-any.whl --no-deps
 pip install cryptography httpx  # transitive deps
 ```
 
@@ -312,7 +317,7 @@ EnfinitOSAuditor(
 Methods:
 
 - `verify_proof_pack(pack) → AuditReport`
-- `verify_proof_chain(records) → ChainAuditReport`
+- `verify_proof_chain(records, prior_after_hash=None) → ChainAuditReport`
 - `verify_metering_projection(proof, metering) → ProjectionAuditReport`
 - `verify_settlement_reconciliation(metering, settlement) → SettlementAuditReport`
 - `verify_all(bundle) → FullAuditReport`
@@ -323,10 +328,13 @@ Methods:
 Pure parsing + structural validation. Raises
 `AuditorError(code="INVALID_INPUT")` on malformed input.
 
-### `verify_proof_chain(records) → ChainAuditReport`
+### `verify_proof_chain(records, prior_after_hash=None) → ChainAuditReport`
 
-Walks records in order, asserts genesis-null, link continuity, and
-issued_at ordering.
+Walks records in order, asserts link continuity and issued_at
+ordering. The first record's `before_hash` must equal
+`prior_after_hash` — pass the previous pack's tail `after_hash` for a
+later pack in a tenant's chain (cross-pack continuity); omit it for a
+standalone/first pack, which enforces the genesis-null invariant.
 
 ### `verify_metering_projection(proof_records, metering, pack_org_id=None) → ProjectionAuditReport`
 
@@ -336,6 +344,18 @@ deterministic formula the platform uses.
 ### `verify_settlement_reconciliation(metering, settlement) → SettlementAuditReport`
 
 Re-derives settlement lines from metering using the share table.
+Version-aware idemKey reconstruction (VER-02): `settlement.v2` uses the
+3-field content hash, legacy `settlement.v1` the 2-field hash — both
+verify.
+
+### `verify_signed_export(export, keys, verifier=None) → SignedExportAuditReport`
+
+Verifies an `export.v1` signed metering/settlement export offline:
+envelope checks, key lookup at `exported_at`, payload
+re-canonicalisation, transparency-hash check
+(`EXPORT_PAYLOAD_HASH_MISMATCH`), and Ed25519 verification over
+`f"{payloadCanonical}|{keyId}"`. Accepts a `SignedExport` or the raw
+wire dict.
 
 ### `load_key_directory(...) → KeyDirectory`
 
