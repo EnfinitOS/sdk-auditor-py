@@ -16,10 +16,22 @@ from .canonical_json import (
     sha256_prefixed,
 )
 from .errors import AuditorError
+
+# Signed exports (export.v1) — verify the platform's signed metering /
+# settlement exports (``?export=true``) offline. This is the signature
+# gate; pass ``export.payload`` on to verify_metering_projection /
+# verify_settlement_reconciliation for the content checks.
+from .exports import (
+    SignedExport,
+    SignedExportAuditReport,
+    parse_signed_export,
+    verify_signed_export,
+)
 from .hashing import (
     constant_time_equal,
     meter_idem_key,
     settlement_idem_key,
+    settlement_idem_key_v1,
     sha256_hex,
     sha256_hex_prefixed,
 )
@@ -102,6 +114,8 @@ __all__ = [
     "SettlementAuditReport",
     "SettlementLine",
     "SettlementSummary",
+    "SignedExport",
+    "SignedExportAuditReport",
     "SignedProofPack",
     "TENANT_CHAIN_VERSION",
     "TenantChainedRecord",
@@ -115,8 +129,10 @@ __all__ = [
     "constant_time_equal",
     "load_key_directory",
     "meter_idem_key",
+    "parse_signed_export",
     "parse_signed_proof_pack",
     "settlement_idem_key",
+    "settlement_idem_key_v1",
     "sha256_hex",
     "sha256_hex_prefixed",
     "sha256_prefixed",
@@ -126,4 +142,5 @@ __all__ = [
     "verify_provenance_chain",
     "verify_provenance_record",
     "verify_settlement_reconciliation",
+    "verify_signed_export",
 ]

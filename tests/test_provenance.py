@@ -357,7 +357,12 @@ def test_report_stamps_sdk_version_and_counts() -> None:
     key = generate_key()
     record = sign_provenance_record(_issued_fields(), key)
     report = verify_provenance_chain([record], [key.verification_key])
-    assert report.sdk_version == "0.0.3"
+    # Compare against the exported constant, not a hardcoded literal, so a
+    # version bump can never break this test again (it asserts the report
+    # STAMPS the SDK version — not which version that is).
+    from enfinitos_auditor import SDK_VERSION
+
+    assert report.sdk_version == SDK_VERSION
     assert report.record_count == 1
     assert report.signed_record_count == 1
     assert report.unsigned_record_count == 0

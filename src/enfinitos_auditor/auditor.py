@@ -196,11 +196,20 @@ class EnfinitOSAuditor:
         )
 
     def verify_proof_chain(
-        self, records: List[ProofRecord]
+        self,
+        records: List[ProofRecord],
+        prior_after_hash: Optional[str] = None,
     ) -> ChainAuditReport:
-        """Chain-walk only. The caller has already verified signatures."""
+        """Chain-walk only. The caller has already verified signatures.
 
-        return verify_proof_chain(records)
+        Pass ``prior_after_hash`` to anchor a later pack's first record
+        at the previous pack's tail ``after_hash`` (cross-pack
+        continuity). Omit it (or pass ``None``) for a standalone /
+        first pack — the auditor then enforces the genesis invariant
+        (``records[0].before_hash is None``).
+        """
+
+        return verify_proof_chain(records, prior_after_hash)
 
     def verify_metering_projection(
         self, proof: ProofPack, metering: MeteringSummary
@@ -243,11 +252,17 @@ class EnfinitOSAuditor:
                     pack=bundle.pack,
                     metering=bundle.metering,
                     settlement=bundle.settlement,
+                    prior_after_hash=bundle.prior_after_hash,
                 )
             )
 
         pack_report = self.verify_proof_pack(bundle.pack)
-        chain_report = self.verify_proof_chain(bundle.pack.records)
+        # Forward the optional cross-pack anchor — see
+        # AuditBundle.prior_after_hash in types.py. Genesis (no prior
+        # pack) defaults to None.
+        chain_report = self.verify_proof_chain(
+            bundle.pack.records, bundle.prior_after_hash
+        )
 
         metering_input = bundle.metering or bundle.pack.metering
         if metering_input is not None:

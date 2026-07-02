@@ -45,7 +45,7 @@ SUPPORTED_ENVELOPE_VERSIONS: Tuple[str, ...] = ("envelope.v1",)
 SUPPORTED_SIGNATURE_ALGORITHMS: Tuple[str, ...] = ("ed25519",)
 
 # Stamped onto every AuditReport.
-SDK_VERSION: str = "0.0.3"
+SDK_VERSION: str = "0.0.4"
 
 EnvelopeVersion = str
 SignatureAlgorithm = Literal["ed25519"]
@@ -358,6 +358,16 @@ class AuditBundle:
     metering: Optional[MeteringSummary] = None
     settlement: Optional[SettlementSummary] = None
     verification_keys: Optional[List[VerificationKey]] = None
+    #: Optional anchor for cross-pack chain continuity. When a tenant
+    #: issues multiple packs serially (the normal case), each pack's
+    #: first record carries the previous pack's last ``after_hash`` as
+    #: its ``before_hash``. The genesis invariant
+    #: (``records[0].before_hash is None``) holds for the FIRST pack
+    #: only; for every subsequent pack pass the prior pack's tail
+    #: ``after_hash`` here so the chain-walk verifies cross-pack
+    #: continuity instead of falsely tripping
+    #: GENESIS_BEFORE_HASH_NOT_NULL. Omit for a standalone pack.
+    prior_after_hash: Optional[str] = None
 
 
 # ---------------------------------------------------------------------
@@ -408,6 +418,11 @@ AuditReasonCode = Literal[
     "PROVENANCE_CANONICAL_MISMATCH",
     "PROVENANCE_UNSIGNED_RECORD",
     "PROVENANCE_ORG_MISMATCH",
+    # Signed exports (export.v1 envelopes from /v1/metering?export=true and
+    # /v1/settlement?export=true). Additive — reuses the envelope / signature /
+    # canonicalisation / key codes above; only the hash-transparency check
+    # needs its own code.
+    "EXPORT_PAYLOAD_HASH_MISMATCH",
     # Keys
     "KEYS_FETCH_FAILED",
     "KEYS_RESPONSE_MALFORMED",

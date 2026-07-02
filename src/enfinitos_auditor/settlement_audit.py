@@ -11,8 +11,12 @@ Mirrors the TS ``settlementAudit.ts``. Given a MeteringSummary
   4. amountCents equals the deterministic integer split of
      grossAmountCents by share, to the exact cent — no tolerance band
      (SETTLEMENT_AMOUNT_MISMATCH).
-  5. line.idem_key = sha256(meter.idem_key|party_role|ledger_account_code)
-     (SETTLEMENT_IDEM_KEY_MISMATCH) — settlement.v2 3-field content hash.
+  5. line.idem_key reconstructs, VERSION-AWARE (VER-02):
+     ``settlement.v2`` → sha256(meter.idem_key|party_role|ledger_account_code)
+     (3-field content hash, CRYPTO-01); legacy ``settlement.v1`` →
+     sha256(meter.idem_key|party_role) (2-field). Selected by the
+     summary's ``schema_version`` so old proof packs stay verifiable
+     (SETTLEMENT_IDEM_KEY_MISMATCH).
   6. Totals reconcile if provided (SETTLEMENT_TOTAL_MISMATCH).
 
 Rounding policy
@@ -27,7 +31,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Dict, List
 
-from .hashing import settlement_idem_key
+from .hashing import settlement_idem_key, settlement_idem_key_v1
 from .types import (
     SDK_VERSION,
     AuditStep,
@@ -126,9 +130,22 @@ def verify_settlement_reconciliation(
             )
             continue
 
-        # 5. idemKey reconstruction (settlement.v2 — 3-field content hash).
-        expected_idem = settlement_idem_key(
-            line.meter_record_idem_key, line.party_role, line.ledger_account_code
+        # 5. idemKey reconstruction — VERSION-AWARE (VER-02). settlement.v2
+        # uses the 3-field content-hash key (CRYPTO-01); legacy settlement.v1
+        # packs used the 2-field sha256(meterIdemKey|partyRole). Selecting by
+        # the summary's schema_version keeps old proof packs verifiable
+        # instead of flagging every v1 line as a mismatch.
+        is_v2 = settlement.schema_version == "settlement.v2"
+        expected_idem = (
+            settlement_idem_key(
+                line.meter_record_idem_key,
+                line.party_role,
+                line.ledger_account_code,
+            )
+            if is_v2
+            else settlement_idem_key_v1(
+                line.meter_record_idem_key, line.party_role
+            )
         )
         if line.idem_key != expected_idem:
             steps.append(
@@ -140,8 +157,15 @@ def verify_settlement_reconciliation(
                     message=(
                         "settlement-line idemKey does not equal "
                         "sha256(meterIdemKey|partyRole|ledgerAccountCode)"
+                        if is_v2
+                        else "settlement-line idemKey does not equal "
+                        "sha256(meterIdemKey|partyRole)"
                     ),
-                    detail={"expected": expected_idem, "actual": line.idem_key},
+                    detail={
+                        "expected": expected_idem,
+                        "actual": line.idem_key,
+                        "schemaVersion": settlement.schema_version,
+                    },
                 )
             )
         else:

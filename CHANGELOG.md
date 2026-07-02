@@ -5,6 +5,61 @@ TypeScript implementation (`@enfinitos/sdk-auditor` on npm)
 release-for-release with identical wire shapes, reason codes, and
 verdicts.
 
+## 0.0.4 — 2026-07-02
+
+### Added
+
+- **Cross-pack chain anchor (`prior_after_hash`).** The platform seals
+  proof packs in series: pack 2's `records[0].beforeHash` equals pack
+  1's last `afterHash`, not null (`sealProofPack` threads
+  `previousAfterHash`). `verify_proof_chain(records,
+  prior_after_hash=None)` gains an optional keyword argument — pass the
+  previous pack's tail `after_hash` to verify cross-pack continuity;
+  a mismatch reports `CHAIN_LINK_MISMATCH`. Omitted (the default), the
+  legacy genesis invariant (`records[0].before_hash is None`) applies
+  unchanged, so single-pack callers are unaffected. Threaded through
+  `EnfinitOSAuditor.verify_proof_chain` and `verify_all` via the new
+  `AuditBundle.prior_after_hash` field. Mirrors the TS
+  `priorAfterHash` semantics exactly.
+- **Legacy `settlement.v1` verification (VER-02).** New
+  `settlement_idem_key_v1(meter_record_idem_key, party_role)` — the
+  2-field `sha256(meterIdemKey|partyRole)` used by packs sealed before
+  the CRYPTO-01 / `settlement.v2` flip.
+  `verify_settlement_reconciliation` now selects the reconstruction
+  formula by the summary's `schema_version`, so genuine historical
+  `settlement.v1` evidence verifies VALID instead of every line
+  flagging `SETTLEMENT_IDEM_KEY_MISMATCH`. This supersedes the 0.0.3
+  migration note below — re-issuing v1 summaries is no longer
+  required.
+- **Signed-export verification (`verify_signed_export`)** — verifies
+  the `export.v1` envelopes the platform issues from
+  `GET /v1/metering?export=true` and `GET /v1/settlement?export=true`:
+  key-directory lookup (validity window anchored at `exportedAt`),
+  payload re-canonicalisation (`canonical_sort_keys`),
+  transparency-hash check, and Ed25519 verification over
+  `f"{payloadCanonical}|{keyId}"`. New module
+  `enfinitos_auditor.exports` with `SignedExport`,
+  `SignedExportAuditReport`, and `parse_signed_export` (accepts the
+  raw wire dict from `json.load`). New reason code
+  `EXPORT_PAYLOAD_HASH_MISMATCH`; all other failures reuse the
+  existing envelope / key / canonicalisation / signature codes. After
+  the signature gate passes, feed `export.payload` to
+  `verify_metering_projection` / `verify_settlement_reconciliation`
+  for the content checks.
+
+### Changed
+
+- `SDK_VERSION` constant (stamped onto every audit report) bumped to
+  `"0.0.4"`.
+
+### Publishing note
+
+- **The published 0.0.2 packages fail every settlement.v2 pack the
+  platform now issues** (every line flags
+  `SETTLEMENT_IDEM_KEY_MISMATCH` under the old 2-field key). 0.0.4 is
+  the minimum version that verifies current packs — republish
+  npm/PyPI/crates together and treat 0.0.2/0.0.3 as superseded.
+
 ## 0.0.3 — 2026-06-11
 
 ### Changed (BREAKING — settlement reconciliation)

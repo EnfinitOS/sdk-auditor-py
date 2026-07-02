@@ -137,8 +137,23 @@ def build_valid_pack(
     return pack, key
 
 
-def build_multi_record_chain(count: int, key: GeneratedKey) -> SignedProofPack:
-    """Produce N records, properly chained."""
+def build_multi_record_chain(
+    count: int,
+    key: GeneratedKey,
+    prior_after_hash: Optional[str] = None,
+    start_index: int = 0,
+) -> SignedProofPack:
+    """Produce N records, properly chained.
+
+    ``prior_after_hash`` seeds ``records[0].before_hash`` — pass the
+    previous pack's tail ``after_hash`` to build the SECOND pack of a
+    cross-pack chain, mirroring the platform's ``sealProofPack``
+    (packages/sandbox-core/src/tenantState.ts threads
+    ``previousAfterHash`` so pack 2's first record chains off pack 1's
+    last afterHash, not null). Defaults keep the legacy single-pack
+    behaviour byte-identical. ``start_index`` offsets receipt ids /
+    nonces / timestamps so two packs don't collide.
+    """
 
     from datetime import datetime, timedelta, timezone
 
@@ -146,29 +161,30 @@ def build_multi_record_chain(count: int, key: GeneratedKey) -> SignedProofPack:
     base_time = datetime(2026, 4, 1, 12, 0, 0, tzinfo=timezone.utc)
     base_rendered = datetime(2026, 4, 1, 11, 59, 0, tzinfo=timezone.utc)
     for i in range(count):
+        n = start_index + i
         payload = ProofReceiptPayload(
             version="1",
-            receipt_id=f"rec_{str(i).zfill(3)}",
+            receipt_id=f"rec_{str(n).zfill(3)}",
             correlation_id=None,
-            spatial_anchor_id=f"anchor_{i % 3}",
+            spatial_anchor_id=f"anchor_{n % 3}",
             spatial_placement_id=None,
-            issued_at=(base_time + timedelta(minutes=i))
+            issued_at=(base_time + timedelta(minutes=n))
             .isoformat()
             .replace("+00:00", "Z"),
-            rendered_at=(base_rendered + timedelta(seconds=i))
+            rendered_at=(base_rendered + timedelta(seconds=n))
             .isoformat()
             .replace("+00:00", "Z"),
-            dwell_ms=1000 + i * 250,
-            nonce=f"nonce_{i}",
+            dwell_ms=1000 + n * 250,
+            nonce=f"nonce_{n}",
             witness=None,
         )
-        before = None if i == 0 else records[i - 1].after_hash
+        before = prior_after_hash if i == 0 else records[i - 1].after_hash
         records.append(sign_record(payload, key, before))
     return SignedProofPack(
         envelope_version="envelope.v1",
         issued_at="2026-04-01T13:00:00.000Z",
         org_id="org_test",
-        pack_id="pack_multi",
+        pack_id="pack_multi" if start_index == 0 else f"pack_multi_{start_index}",
         records=records,
     )
 

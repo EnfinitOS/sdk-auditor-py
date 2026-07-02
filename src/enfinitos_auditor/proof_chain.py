@@ -3,7 +3,16 @@
 Mirrors the TS ``proofChain.ts`` semantics. Walks records in issuance
 order and verifies three invariants:
 
-  1. **Genesis.**    records[0].before_hash MUST be None.
+  1. **Genesis.**    records[0].before_hash MUST equal the provided
+                     ``prior_after_hash`` (or ``None`` for a
+                     standalone first pack). When verifying a later
+                     pack in a tenant's chain, pass the previous
+                     pack's tail ``after_hash`` so the cross-pack link
+                     is verified rather than falsely rejected — the
+                     platform seals packs in series and threads
+                     ``previousAfterHash`` into each new pack
+                     (packages/sandbox-core/src/tenantState.ts
+                     ``sealProofPack``).
   2. **Continuity.** For i ≥ 1, records[i].before_hash MUST equal
                      records[i-1].after_hash.
   3. **Ordering.**   issued_at MUST be non-decreasing along the chain.
@@ -27,12 +36,23 @@ from .types import (
 )
 
 
-def verify_proof_chain(records: List[ProofRecord]) -> ChainAuditReport:
+def verify_proof_chain(
+    records: List[ProofRecord],
+    prior_after_hash: Optional[str] = None,
+) -> ChainAuditReport:
     """Walk records in array order; report each link's status.
 
     The report's overall status is INVALID if any step is INVALID,
     otherwise VALID. An empty input set is reported as INVALID
     (auditing zero records is meaningless).
+
+    ``prior_after_hash`` (optional, defaults to ``None``) anchors the
+    first record's ``before_hash``. Pass ``None`` (or omit) when
+    verifying a standalone or first pack — the auditor then enforces
+    the genesis invariant (``records[0].before_hash is None``). Pass
+    the previous pack's tail ``after_hash`` when verifying a later
+    pack in a tenant's chain so cross-pack continuity is enforced
+    rather than falsely tripped as GENESIS_BEFORE_HASH_NOT_NULL.
     """
 
     verified_at = datetime.now(tz=timezone.utc).isoformat().replace("+00:00", "Z")
@@ -55,30 +75,67 @@ def verify_proof_chain(records: List[ProofRecord]) -> ChainAuditReport:
             ],
         )
 
-    # 1. Genesis check.
+    # 1. Genesis / cross-pack link check.
     first = records[0]
-    if first.before_hash is not None:
-        steps.append(
-            AuditStep(
-                target="records[0].beforeHash",
-                kind="chain_link",
-                status="INVALID",
-                reason="GENESIS_BEFORE_HASH_NOT_NULL",
-                message=(
-                    "first record carries a non-null beforeHash — the chain "
-                    "is rooted at a record the auditor has not been given. "
-                    "The pack is incomplete."
-                ),
-                detail={"beforeHash": first.before_hash},
+    if first.before_hash != prior_after_hash:
+        # Two distinct failure modes, distinct messages (mirrors TS):
+        #   - prior_after_hash is None: caller asserted this is the genesis
+        #     of the tenant's chain, but the first record points at
+        #     something earlier we weren't given.
+        #   - prior_after_hash is not None: caller passed the previous
+        #     pack's tail hash; first.before_hash should match it for
+        #     cross-pack continuity.
+        if prior_after_hash is None:
+            steps.append(
+                AuditStep(
+                    target="records[0].beforeHash",
+                    kind="chain_link",
+                    status="INVALID",
+                    reason="GENESIS_BEFORE_HASH_NOT_NULL",
+                    message=(
+                        "first record carries a non-null beforeHash — the chain "
+                        "is rooted at a record the auditor has not been given. "
+                        "Pass `prior_after_hash` if this is a later pack in a "
+                        "tenant's chain; otherwise the pack is incomplete."
+                    ),
+                    detail={"beforeHash": first.before_hash},
+                )
             )
-        )
+        else:
+            # Same reason as continuity breaks within a pack — both are
+            # "this beforeHash does not match the expected prior afterHash";
+            # here the "prior" is the previous pack's tail rather than the
+            # previous record in this pack.
+            steps.append(
+                AuditStep(
+                    target="records[0].beforeHash",
+                    kind="chain_link",
+                    status="INVALID",
+                    reason="CHAIN_LINK_MISMATCH",
+                    message=(
+                        "first record's beforeHash does not equal the supplied "
+                        "priorAfterHash — cross-pack continuity is broken."
+                    ),
+                    detail={
+                        "expected": prior_after_hash,
+                        "actual": first.before_hash,
+                    },
+                )
+            )
     else:
         steps.append(
             AuditStep(
                 target="records[0].beforeHash",
                 kind="chain_link",
                 status="VALID",
-                message="genesis record has null beforeHash, as expected",
+                message=(
+                    "genesis record has null beforeHash, as expected"
+                    if prior_after_hash is None
+                    else (
+                        "first record's beforeHash matches the supplied "
+                        "priorAfterHash"
+                    )
+                ),
             )
         )
 

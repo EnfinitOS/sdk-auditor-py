@@ -8,6 +8,8 @@ Same three sha256 flavours as the TypeScript port:
   3. **Meter idem key** — ``sha256(f"{proof_receipt_id}|{unit_type}")``.
   4. **Settlement idem key** — ``sha256(f"{meter_idem_key}|{party_role}|
      {ledger_account_code}")`` (``settlement.v2``, 3-field content hash).
+     Legacy ``settlement.v1`` packs use the 2-field
+     ``settlement_idem_key_v1`` (VER-02).
 
 Why these stay as separate named helpers
 ----------------------------------------
@@ -55,6 +57,19 @@ def settlement_idem_key(
     return sha256_hex(f"{meter_record_idem_key}|{party_role}|{ledger_account_code}")
 
 
+def settlement_idem_key_v1(meter_record_idem_key: str, party_role: str) -> str:
+    """Reconstruct a legacy **settlement.v1** line's idem key.
+
+    The 2-field ``sha256(meterRecordIdemKey|partyRole)``. Kept so the
+    auditor can still verify proof packs sealed before the CRYPTO-01 /
+    ``settlement.v2`` 3-field key landed (VER-02). The caller selects
+    v1 vs v2 by the summary's ``schema_version``; do not use this for
+    v2 packs. Byte-identical to the TS ``settlementIdemKeyV1``.
+    """
+
+    return sha256_hex(f"{meter_record_idem_key}|{party_role}")
+
+
 def constant_time_equal(a: bytes, b: bytes) -> bool:
     """Constant-time byte comparison.
 
@@ -80,6 +95,7 @@ __all__ = [
     "constant_time_hex_equal",
     "meter_idem_key",
     "settlement_idem_key",
+    "settlement_idem_key_v1",
     "sha256_hex",
     "sha256_hex_prefixed",
 ]

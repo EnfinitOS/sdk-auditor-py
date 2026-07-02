@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from enfinitos_auditor.hashing import settlement_idem_key
+from enfinitos_auditor.hashing import settlement_idem_key, settlement_idem_key_v1
 from enfinitos_auditor.settlement_audit import verify_settlement_reconciliation
 from enfinitos_auditor.types import (
     MeterRecord,
@@ -184,3 +184,86 @@ def test_exact_cent_flags_one_cent_error_on_non_largest_line() -> None:
     report = verify_settlement_reconciliation(metering, settlement)
     assert report.status == "INVALID"
     assert any(s.reason == "SETTLEMENT_AMOUNT_MISMATCH" for s in report.steps)
+
+
+# ---------------------------------------------------------------------
+# VER-02: legacy settlement.v1 idemKey (2-field) stays verifiable
+#
+# Proof packs sealed before the CRYPTO-01 / settlement.v2 3-field idemKey
+# used the 2-field sha256(meterIdemKey|partyRole). The auditor must
+# reconstruct per the summary's schema_version so old packs verify
+# cleanly instead of every line flagging SETTLEMENT_IDEM_KEY_MISMATCH.
+# Mirrors auditor-ts __tests__/settlementAudit.test.ts (VER-02 block).
+# ---------------------------------------------------------------------
+
+
+def _build_v1_single_line() -> "tuple[MeteringSummary, SettlementSummary]":
+    meter_idem = "meter_v1_legacy"
+    gross = 5000
+    metering = MeteringSummary(
+        schema_version="metering.v1",
+        org_id="org_v1",
+        period_start="2026-01-01T00:00:00.000Z",
+        period_end="2026-02-01T00:00:00.000Z",
+        records=[
+            MeterRecord(
+                idem_key=meter_idem,
+                proof_receipt_id="rcpt_v1_legacy",
+                unit_type="DWELL_SECONDS",
+                unit_count="50",
+                weight="1",
+                spatial_anchor_id="anchor_v1",
+                spatial_placement_id=None,
+                observed_at="2026-01-15T00:00:00.000Z",
+                status="ACCEPTED",
+            )
+        ],
+    )
+    settlement = SettlementSummary(
+        schema_version="settlement.v1",
+        org_id="org_v1",
+        period_start="2026-01-01T00:00:00.000Z",
+        period_end="2026-02-01T00:00:00.000Z",
+        currency="GBP",
+        meter_gross={meter_idem: gross},
+        lines=[
+            SettlementLine(
+                # 2-field legacy key — no ledgerAccountCode in the hash domain.
+                idem_key=settlement_idem_key_v1(meter_idem, "TENANT"),
+                meter_record_idem_key=meter_idem,
+                party_role="TENANT",
+                share="1.000000",
+                ledger_account_code="SPATIAL_REVENUE_GROSS",
+                amount_cents=gross,
+                currency="GBP",
+                status="PROJECTED",
+            )
+        ],
+        totals=SettlementTotals(
+            gross_cents=gross, net_to_tenant_cents=gross, platform_fee_cents=0
+        ),
+    )
+    return metering, settlement
+
+
+def test_v1_pack_two_field_idem_key_verifies_valid() -> None:
+    metering, settlement = _build_v1_single_line()
+    report = verify_settlement_reconciliation(metering, settlement)
+    assert report.status == "VALID"
+    assert not any(
+        s.reason == "SETTLEMENT_IDEM_KEY_MISMATCH" for s in report.steps
+    )
+
+
+def test_v1_line_with_wrong_idem_key_is_still_flagged() -> None:
+    metering, settlement = _build_v1_single_line()
+    settlement.lines[0] = replace(settlement.lines[0], idem_key="0" * 64)
+    report = verify_settlement_reconciliation(metering, settlement)
+    assert any(s.reason == "SETTLEMENT_IDEM_KEY_MISMATCH" for s in report.steps)
+
+
+def test_v2_line_using_old_two_field_key_is_flagged() -> None:
+    metering, settlement = _build_v1_single_line()
+    settlement.schema_version = "settlement.v2"  # now 3-field is required
+    report = verify_settlement_reconciliation(metering, settlement)
+    assert any(s.reason == "SETTLEMENT_IDEM_KEY_MISMATCH" for s in report.steps)
