@@ -49,3 +49,5 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# src layout: let pytest import the package without a pip install -e.
+pythonpath = ["src"]
