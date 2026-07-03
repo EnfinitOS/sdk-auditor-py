@@ -135,9 +135,13 @@ with open("./pack.json") as f:
     pack = json.load(f)
 
 auditor = EnfinitOSAuditor(
-    # "platform" fetches from https://api.enfinitos.com/v1/runtime-keys.
-    # "local" reads from local_keys (offline audit).
+    # "platform" fetches signing keys over HTTPS; "local" reads from
+    # local_keys (fully offline audit).
     verification_key_source="platform",
+    # UNTIL THE APRIL 2027 LAUNCH: the default platform keys URL
+    # (https://api.enfinitos.com/v1/runtime-keys) is not live yet —
+    # point at the sandbox explicitly:
+    platform_keys_url="https://sandbox.api.enfinitos.com/v1/runtime-keys",
 )
 
 report = auditor.verify_proof_pack(pack)
